@@ -1,2 +1,3 @@
 (library
- (name ATP))
+ (name ATP)
+ (libraries base))
