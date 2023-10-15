@@ -17,6 +17,7 @@ let rec eval fm v =
   | Forall(_,_) -> failwith "Forall not prop"
   | Exists(_,_) -> failwith "Exists no prop"
 
+let negate p = Not (p)
 
 let pname(P s) = s
 
@@ -33,7 +34,11 @@ let default_parser = parse_prop_formula
 let print_propvar _prec p = print_string(pname p)
 
 let print_prop_formula = print_qformula print_propvar
-
+(* If confused by below fn, consider that the input to subfn
+   could by a fn f which already "knows" the formula, e.g.
+   f: formula -> valuation -> bool, and we pass in
+   f fm partial application
+*)
 let rec onallvaluations subfn v ats =
   match ats with
   | [] -> subfn v
@@ -41,7 +46,7 @@ let rec onallvaluations subfn v ats =
     onallvaluations subfn (v' false) ps &&
     onallvaluations subfn (v' true) ps
 
-let rec to_string fm = match fm with
+let rec to_string = function
   | Atom a -> pname a
   | Not(p) -> "~" ^ to_string p
   | And(p,q) -> to_string p ^ " /\\ " ^ to_string q
@@ -68,3 +73,8 @@ let print_truthtable fm =
   print_string separator; print_newline()
 
 
+let tautology fm = 
+  onallvaluations (eval fm) (fun _ -> false) (atoms fm)
+
+let unsatisfiable fm = tautology( negate fm)
+let satisfiable fm = not (unsatisfiable fm)
