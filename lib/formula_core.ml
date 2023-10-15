@@ -108,4 +108,3 @@ let rec overatoms f fm b =
 let atom_union f fm = CCList.sort_uniq ~cmp:compare (overatoms (fun h t -> f(h)@t) fm [])
 
 let atoms fm = atom_union (fun a -> [a]) fm
-

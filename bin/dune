@@ -1,4 +1,6 @@
 (executable
+ (preprocess
+  (pps ppx_formula))
  (public_name ATP)
  (name main)
  (libraries lib))

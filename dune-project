@@ -19,7 +19,7 @@
  (name ATP)
  (synopsis "A short synopsis")
  (description "A longer description")
- (depends ocaml dune containers)
+ (depends ocaml dune containers ppxlib)
  (tags
   (topics "to describe" your project)))
 
