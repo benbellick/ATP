@@ -78,3 +78,5 @@ let tautology fm =
 
 let unsatisfiable fm = tautology( negate fm)
 let satisfiable fm = not (unsatisfiable fm)
+
+let psubst subfn = onatoms (fun p -> Fpf.tryapplyd subfn p (Atom p))

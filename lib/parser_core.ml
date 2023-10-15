@@ -30,7 +30,7 @@ let lex inp =
 
 let make_parser pfn s =
   let expr,rest = pfn (lex s) in
-  if List.is_empty rest then expr else failwith "unparsed input"
+  if CCList.is_empty rest then expr else failwith "unparsed input"
 
 
 (* This is lifted directly from the appendix without understanding the code *)
