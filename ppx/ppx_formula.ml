@@ -1,7 +1,6 @@
 open Ppxlib
 
-let expand ~loc ~path:_ _=
-  Ast_builder.Default.estring ~loc "r3p14ccd 70 r4nd0m 5tr1n9"
+let expand ~loc ~path:_ _ = [%expr "hey"]
 
 let extension =
   Extension.declare
@@ -13,4 +12,4 @@ let extension =
 let rule = Context_free.Rule.extension extension
 
 let () =
-  Driver.register_transformation ~rules:[rule] "my_transformation"
+  Driver.register_transformation ~rules:[rule] "prop_transformation"
