@@ -1,6 +1,11 @@
 open Ppxlib
 
-let expand ~loc ~path:_ _ = [%expr "hey"]
+let expand ~loc ~path:_ input =
+  Ast_builder.Default.(
+    pexp_apply ~loc (evar ~loc "Lib.Prop_logic.parse_prop_formula")
+      [Asttypes.Nolabel, estring ~loc input]
+  )
+
 
 let extension =
   Extension.declare
