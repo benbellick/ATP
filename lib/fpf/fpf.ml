@@ -6,7 +6,6 @@
 (*                                                                           *)
 (* Idea due to Diego Olivier Fernandez Pons (OCaml list, 2003/11/10).        *)
 (* ------------------------------------------------------------------------- *)
-
 type ('a,'b)func =
    Empty
  | Leaf of int * ('a*'b)list

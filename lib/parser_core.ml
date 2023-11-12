@@ -58,7 +58,6 @@ let parse_right_infix opsym opcon =
 let parse_list opsym =
   parse_ginfix opsym (fun f e1 e2 -> (f e1)@[e2]) (fun x -> [x])
 
-
 let bracket p n f x y =
   let open Format in
   (if p then print_string "(" else ());

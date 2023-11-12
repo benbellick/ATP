@@ -1,0 +1,9 @@
+open Lib__Prop_logic;;
+
+#install_printer print_prop_formula;;
+
+let ps = List.map parse_prop_formula
+    ["p /\\ q ==> p \\/ q";
+     "p /\\ q \\/ ~( p \\/ q)";
+         ];;
+

@@ -31,7 +31,7 @@ let parse_prop_formula = make_parser
 
 let default_parser = parse_prop_formula
 
-let print_propvar _prec p = print_string(pname p)
+let print_propvar _prec p = Format.print_string(pname p)
 
 let print_prop_formula = print_qformula print_propvar
 (* If confused by below fn, consider that the input to subfn
@@ -67,7 +67,7 @@ let print_truthtable fm =
      and ans = truthstring(eval fm v) in
      print_string(CCList.fold_right (^) lis ("| "^ans)); print_newline(); true in
   let separator = String.make (width * List.length ats + 9) '-' in
-  print_string(CCList.fold_right (fun s t -> fixw(pname s) ^ t) ats "| " ^ to_string fm);
+  print_string(CCList.fold_right (fun s t -> fixw(pname s) ^ t) ats "| formula");
   print_newline(); print_string separator; print_newline();
   let _ = onallvaluations mk_row (fun _x -> false) ats in
   print_string separator; print_newline()
@@ -80,3 +80,36 @@ let unsatisfiable fm = tautology( negate fm)
 let satisfiable fm = not (unsatisfiable fm)
 
 let psubst subfn = onatoms (fun p -> Fpf.tryapplyd subfn p (Atom p))
+
+let rec dual = function
+  | False -> True
+  | True -> False
+  | Atom(p) -> Atom(p)
+  | Not(p) -> Not(dual p)
+  | And(p,q) -> Or(dual p, dual q)
+  | Or(p,q) -> And(dual p, dual q)
+  | _ -> failwith "Formula contains ==> or <=>"
+    
+
+let psimplify1 = function 
+  | Not False -> True
+  | Not True -> False
+  | Not(Not p) -> p
+  | And(_,False) | And(False,_) -> False
+  | And(p,True) | And(True,p) -> p
+  | Or(p,False) | Or(False,p) -> p
+  | Or(_,True) | Or(True,_) -> True
+  | Imp(False,_) | Imp(_,True) -> True
+  | Imp(True,p) -> p
+  | Imp(p,False) -> Not p
+  | Iff(p,True) | Iff(True,p) -> p
+  | Iff(p,False) | Iff(False,p) -> Not p
+  | fm -> fm
+
+let rec psimplify = function
+  | Not p -> psimplify1 (Not(psimplify p))
+  | And(p,q) -> psimplify1 (And(psimplify p,psimplify q))
+  | Or(p,q) -> psimplify1 (Or(psimplify p,psimplify q))
+  | Imp(p,q) -> psimplify1 (Imp(psimplify p,psimplify q))
+  | Iff(p,q) -> psimplify1 (Iff(psimplify p,psimplify q))
+  | fm -> fm
