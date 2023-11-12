@@ -16,6 +16,8 @@ let rec f = function
     (* print_prop_formula @@ dual p; *)
     print_newline();
     print_prop_formula @@ psimplify p;
+    print_newline();
+    print_prop_formula @@ dnf p;
     f ps
     
 let () = f ps

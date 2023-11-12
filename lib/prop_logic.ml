@@ -113,3 +113,68 @@ let rec psimplify = function
   | Imp(p,q) -> psimplify1 (Imp(psimplify p,psimplify q))
   | Iff(p,q) -> psimplify1 (Iff(psimplify p,psimplify q))
   | fm -> fm
+
+let negative = function (Not _) -> true | _ -> false
+let positive lit = not(negative lit)
+let negate = function (Not p) -> p | p -> Not p
+
+let rec nnf = function
+| And(p,q) -> And(nnf p,nnf q)
+| Or(p,q) -> Or(nnf p,nnf q)
+| Imp(p,q) -> Or(nnf(Not p),nnf q)
+| Iff(p,q) -> Or(And(nnf p,nnf q),And(nnf(Not p),nnf(Not q)))
+| Not(Not p) -> nnf p
+| Not(And(p,q)) -> Or(nnf(Not p),nnf(Not q))
+| Not(Or(p,q)) -> And(nnf(Not p),nnf(Not q))
+| Not(Imp(p,q)) -> And(nnf p,nnf(Not q))
+| Not(Iff(p,q)) -> Or(And(nnf p,nnf(Not q)),And(nnf(Not p),nnf q))
+| fm -> fm
+
+let nnf fm = nnf(psimplify fm)
+
+let rec nenf  = function
+Not(Not p) -> nenf p
+| Not(And(p,q)) -> Or(nenf(Not p),nenf(Not q))
+| Not(Or(p,q)) -> And(nenf(Not p),nenf(Not q))
+| Not(Imp(p,q)) -> And(nenf p,nenf(Not q))
+| Not(Iff(p,q)) -> Iff(nenf p,nenf(Not q))
+| And(p,q) -> And(nenf p,nenf q)
+| Or(p,q) -> Or(nenf p,nenf q)
+| Imp(p,q) -> Or(nenf(Not p),nenf q)
+| Iff(p,q) -> Iff(nenf p,nenf q)
+| fm -> fm
+
+let nenf fm = nenf(psimplify fm)
+
+let list_conj l = if l = [] then True else CCList.reduce_exn (fun x y -> And(x,y)) l
+
+let list_disj l = if l = [] then False else CCList.reduce_exn (fun x y -> Or(x,y)) l
+
+let mk_lits pvs v =
+  list_conj (CCList.map (fun p -> if eval p v then p else Not p) pvs)
+
+
+let rec allsatvaluations subfn v pvs =
+match pvs with
+  | [] -> if subfn v then [v] else []
+  | p::ps -> let v' t q = if q = p then t else v(q) in
+    allsatvaluations subfn (v' false) ps @
+    allsatvaluations subfn (v' true) ps
+
+let dnf fm =
+  let open CCList in 
+  let pvs = atoms fm in
+  let satvals = allsatvaluations (eval fm) (fun _ -> false) pvs in
+  list_disj (map (mk_lits (map (fun p -> Atom p) pvs)) satvals)
+
+let rec distrib fm =
+match fm with
+  | And(p,(Or(q,r))) -> Or(distrib(And(p,q)),distrib(And(p,r)))
+  | And(Or(p,q),r) -> Or(distrib(And(p,r)),distrib(And(q,r)))
+  | _ -> fm
+
+let rec rawdnf fm =
+match fm with
+  | And(p,q) -> distrib(And(rawdnf p,rawdnf q))
+  | Or(p,q) -> Or(rawdnf p,rawdnf q)
+  | _ -> fm
