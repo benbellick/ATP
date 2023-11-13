@@ -77,12 +77,33 @@ let print_formula pfn =
     print_formula newpr q in
   print_formula 0
 
+let rec pp_formula pfn out (fm : 'a formula) =
+  let pp = pp_formula pfn in
+  let open CCFormat in
+  (match fm with
+   | False -> string out "false"
+   | True -> string out "true"
+   | Atom a -> fprintf out "%a" pfn a
+   | Not a -> fprintf out "~%a" pp a
+   | And (p, q) -> fprintf out "%a /\\ %a" pp p pp q
+   | Or (p, q) ->  fprintf out "%a \\/ %a" pp p pp q
+   | Imp (p, q) ->  fprintf out "%a ==> %a" pp p pp q
+   | Iff (p, q) ->  fprintf out "%a <=> %a" pp p pp q
+   | Forall (_, _) ->  fprintf out "%s /\\ %s" "p" "q"
+   | Exists (_, _) ->  fprintf out "%s /\\ %s" "p" "q")
+
+
 let print_qformula pfn fm =
   let open Format in
   open_box 0; print_string "<<";
   open_box 0; print_formula pfn fm; close_box();
   print_string ">>"; close_box()
 
+let pp_qformula pfn out fm =
+  let open CCFormat in
+  pp_open_box out 0; pp_print_string out "<<";
+  pp_open_box out 0; pp_formula pfn out fm; pp_close_box out ();
+  pp_print_string out ">>"; pp_close_box out()
 
 let rec onatoms f fm =
   match fm with

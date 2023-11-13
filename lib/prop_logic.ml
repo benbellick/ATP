@@ -33,12 +33,17 @@ let default_parser = parse_prop_formula
 
 let print_propvar _prec p = Format.print_string(pname p)
 
+let pp_propvar out p = CCFormat.string out (pname p)
+
 let print_prop_formula = print_qformula print_propvar
 (* If confused by below fn, consider that the input to subfn
    could by a fn f which already "knows" the formula, e.g.
    f: formula -> valuation -> bool, and we pass in
    f fm partial application
 *)
+
+let pp_prop_formula out (fm : prop formula) = pp_qformula pp_propvar out fm
+
 let rec onallvaluations subfn v ats =
   match ats with
   | [] -> subfn v
@@ -178,3 +183,20 @@ match fm with
   | And(p,q) -> distrib(And(rawdnf p,rawdnf q))
   | Or(p,q) -> Or(rawdnf p,rawdnf q)
   | _ -> fm
+
+let allpairs f l1 l2 =
+  let open CCList in
+  let* i1 = l1 in
+  let+ i2 = l2 in
+  f i1 i2
+
+
+let distrib s1 s2 =
+  let cmp = compare in 
+  CCList.(sort_uniq (allpairs (union ~eq:(=))  s1 s2) ~cmp)
+
+let rec purednf fm =
+  match fm with
+  | And(p,q) -> distrib (purednf p) (purednf q)
+  | Or(p,q) -> CCList.union ~eq:(=) (purednf p) (purednf q)
+  | _ -> [[fm]]
