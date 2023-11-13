@@ -77,20 +77,21 @@ let print_formula pfn =
     print_formula newpr q in
   print_formula 0
 
+(**TODO: fix the abundance of parantheses*)
 let rec pp_formula pfn out (fm : 'a formula) =
   let pp = pp_formula pfn in
   let open CCFormat in
-  (match fm with
+  match fm with
    | False -> string out "false"
    | True -> string out "true"
    | Atom a -> fprintf out "%a" pfn a
    | Not a -> fprintf out "~%a" pp a
-   | And (p, q) -> fprintf out "%a /\\ %a" pp p pp q
-   | Or (p, q) ->  fprintf out "%a \\/ %a" pp p pp q
-   | Imp (p, q) ->  fprintf out "%a ==> %a" pp p pp q
-   | Iff (p, q) ->  fprintf out "%a <=> %a" pp p pp q
-   | Forall (_, _) ->  fprintf out "%s /\\ %s" "p" "q"
-   | Exists (_, _) ->  fprintf out "%s /\\ %s" "p" "q")
+   | And (p, q) -> fprintf out "(%a /\\ %a)" pp p pp q
+   | Or (p, q) ->  fprintf out "(%a \\/ %a)" pp p pp q
+   | Imp (p, q) ->  fprintf out "(%a ==> %a)" pp p pp q
+   | Iff (p, q) ->  fprintf out "(%a <=> %a)" pp p pp q
+   | Forall (p, q) ->  fprintf out "(forall %s . %a)" p pp q
+   | Exists (p, q) ->  fprintf out "(exists %s . %a)" p pp q
 
 
 let print_qformula pfn fm =
