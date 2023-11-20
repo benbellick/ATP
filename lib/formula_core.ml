@@ -12,6 +12,10 @@ type 'a formula =
   | Forall of string * 'a formula
   | Exists of string * 'a formula
 
+let mk_and p q = And (p, q)
+let mk_or p q = Or (p, q)
+let mk_iff p q = Iff (p, q)
+
 let rec parse_atomic_formula (ifn, afn) vs inp =
   match inp with
   | [] -> failwith "formula expected"

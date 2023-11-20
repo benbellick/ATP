@@ -14,3 +14,8 @@ let rec allsets m l =
         CCList.union ~eq:( = )
           (image (fun g -> h :: g) (allsets (m - 1) t))
           (allsets m t)
+
+let unions (sets : 'a list list) =
+  let union (l1 : 'a list) (l2 : 'a list) = CCList.union ~eq:( = ) l1 l2 in
+  let reduce (ss : 'a list list) = CCList.reduce_exn union ss in
+  CCList.sort_uniq ~cmp:compare (reduce sets)

@@ -357,3 +357,45 @@ module Examples = struct
         | _ -> failwith "Bad error")
     | _ -> failwith "Bad error"
 end
+
+let mkprop n = (Atom (P ("p_" ^ string_of_int n)), n + 1)
+
+let rec maincnf ((fm, _defs, _n) as trip) =
+  match fm with
+  | And (p, q) -> defstep mk_and (p, q) trip
+  | Or (p, q) -> defstep mk_or (p, q) trip
+  | Iff (p, q) -> defstep mk_iff (p, q) trip
+  | _ -> trip
+
+and defstep op (p, q) (_fm, defs, n) =
+  let open Fpf in
+  let fm1, defs1, n1 = maincnf (p, defs, n) in
+  let fm2, defs2, n2 = maincnf (q, defs1, n1) in
+  let fm' = op fm1 fm2 in
+  try (fst (apply defs2 fm'), defs2, n2)
+  with Failure _ ->
+    let v, n3 = mkprop n2 in
+    (v, (fm' |-> (v, Iff (v, fm'))) defs2, n3)
+
+let max_varindex pfx =
+  let m = String.length pfx in
+  fun s n ->
+    let l = String.length s in
+    if l <= m || String.sub s 0 m <> pfx then n
+    else
+      let s' = String.sub s m (l - m) in
+      if CCList.for_all numeric (CCString.to_list s') then
+        max n (int_of_string s')
+      else n
+
+let mk_defcnf fn (fm : 'a formula) =
+  let open CCFun in
+  let open Fpf in
+  let open CCList in
+  let fm' = nenf fm in
+  let n = 1 + Formula_core.overatoms (max_varindex "p_" % pname) fm' 0 in
+  let fm'', defs, _ = fn (fm', undefined, n) in
+  let deflist = map (snd % snd) (graph defs) in
+  Util.unions (simpcnf fm'' :: map simpcnf deflist)
+
+let defcnf fm = list_conj (CCList.map list_disj (mk_defcnf maincnf fm))
