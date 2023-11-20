@@ -1,0 +1,13 @@
+* Translation
+- ~itlist~ -> ~fold~
+- ~non~ ->
+  | John Fn    | Containers fns               | Notes                                                                                |
+  |------------+------------------------------+--------------------------------------------------------------------------------------|
+  | itlist     | fold                         |                                                                                      |
+  | itlist_end | CCList.reduce                |                                                                                      |
+  | non        | CCFun.negate                 |                                                                                      |
+  | setify     | CCList.sort_uniq             | Sets are just lists with uniquenes property                                          |
+  | subset     | CCList.subset                |                                                                                      |
+  | psubset    | CCList.subset,  <>           | Basically psubset checks for proper subset, so we just do the above and additionally check for equality |
+  | image      | CCList.sort_uniq, CCList.map | This function gives the image of a fn applied to a set, so just map over the list and apply sort_uniq |
+  |            |                              |                                                                                    |

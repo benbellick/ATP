@@ -49,7 +49,7 @@ let rec onallvaluations subfn v ats =
   | [] -> subfn v
   | p::ps -> let v' t q = if q = p then t else v(q) in
     onallvaluations subfn (v' false) ps &&
-    onallvaluations subfn (v' true) ps
+    onallvaluations subfn (v' true) ps 
 
 let rec to_string = function
   | Atom a -> pname a
@@ -166,7 +166,7 @@ match pvs with
     allsatvaluations subfn (v' false) ps @
     allsatvaluations subfn (v' true) ps
 
-let dnf fm =
+let _dnf fm =
   let open CCList in 
   let pvs = atoms fm in
   let satvals = allsatvaluations (eval fm) (fun _ -> false) pvs in
@@ -200,3 +200,26 @@ let rec purednf fm =
   | And(p,q) -> distrib (purednf p) (purednf q)
   | Or(p,q) -> CCList.union ~eq:(=) (purednf p) (purednf q)
   | _ -> [[fm]]
+
+let trivial lits =
+  let open CCList in 
+  let pos,neg = partition positive lits in
+  let im = Util.image negate neg in 
+  CCList.inter ~eq:(=) pos (im) <> []
+
+let simpdnf fm =
+  if fm = False then [] else if fm = True then [[]] else
+    let djs = CCList.filter (CCFun.negate trivial) (purednf(nnf fm)) in
+    (* subset doesn't check for proper but original code checks for proper subset. Does this matter?*)
+    CCList.filter (fun d -> not(CCList.exists (fun d' -> (CCList.subset ~eq:(=) d' d) && d' <> d) djs)) djs
+
+let dnf fm = list_disj(CCList.map list_conj (simpdnf fm))
+
+let purecnf fm = Util.image (Util.image negate) (purednf(nnf(Not fm)))
+
+let simpcnf fm =
+  if fm = False then [[]] else if fm = True then [] else
+    let cjs = CCList.filter (CCFun.negate trivial) (purecnf fm) in
+    CCList.filter (fun c -> not(CCList.exists (fun c' -> Util.psubset c' c) cjs)) cjs
+
+let cnf fm = list_conj(CCList.map list_disj (simpcnf fm))
