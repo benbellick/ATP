@@ -223,3 +223,74 @@ let simpcnf fm =
     CCList.filter (fun c -> not(CCList.exists (fun c' -> Util.psubset c' c) cjs)) cjs
 
 let cnf fm = list_conj(CCList.map list_disj (simpcnf fm))
+
+
+module Examples = struct
+let ramsey s t n =
+  let open CCList in
+  let open CCFun in 
+  let open Util in 
+  let vertices = 1 -- n in
+  let yesgrps = map (Util.allsets 2) (allsets s vertices)
+  and nogrps = map (allsets 2) (allsets t vertices) in
+  let e = function
+    | [m;n] -> Atom(P("p_"^(string_of_int m)^"_"^(string_of_int n)))
+    | _ -> failwith "Error in ramsey" in
+  Or(list_disj (map (list_conj % map e) yesgrps),
+     list_disj (map (list_conj % map (fun p -> Not(e p))) nogrps))
+
+let halfsum x y = Iff(x, Not y)
+let halfcarry x y = And(x,y)
+
+let ha x y s c = And(Iff(s,halfsum x y),Iff(c,halfcarry x y))
+
+let carry x y z = Or(And(x,y),And(Or(x,y),z))
+let sum x y z = halfsum (halfsum x y) z
+let fa x y z s c = And(Iff(s,sum x y z),Iff(c,carry x y z))
+
+let conjoin f l = list_conj (CCList.map f l)
+let ripplecarry x y c out n =
+  let open CCList in 
+  conjoin (fun i -> fa (x i) (y i) (c i) (out i) (c(i + 1)))
+(0 -- (n - 1))
+let mk_index x i = Atom(P(x^"_"^(string_of_int i)))
+and mk_index2 x i j =
+Atom(P(x^"_"^(string_of_int i)^"_"^(string_of_int j)))
+let ripplecarry0 x y c out n =
+psimplify
+(ripplecarry x y (fun i -> if i = 0 then False else c i) out n)
+
+
+let ripplecarry1 x y c out n =
+psimplify
+  (ripplecarry x y (fun i -> if i = 0 then True else c i) out n)
+
+let mux sel in0 in1 = Or(And(Not sel,in0),And(sel,in1))
+
+let offset n x i = x(n + i)
+
+let rec carryselect x y c0 c1 s0 s1 c s n k =
+  let (--) = CCList.(--) in 
+let k' = min n k in
+let fm =
+And(And(ripplecarry0 x y c0 s0 k',ripplecarry1 x y c1 s1 k'),
+And(Iff(c k',mux (c 0) (c0 k') (c1 k')),
+conjoin (fun i -> Iff(s i,mux (c 0) (s0 i) (s1 i)))
+(0 -- (k' - 1)))) in
+if k' < k then fm else
+And(fm,carryselect
+(offset k x) (offset k y) (offset k c0) (offset k c1)
+(offset k s0) (offset k s1) (offset k c) (offset k s)
+(n - k) k)
+
+let mk_adder_test n k =
+  let open CCList in
+  match  map mk_index
+["x"; "y"; "c"; "s"; "c0"; "s0"; "c1"; "s1"; "c2"; "s2"]  with
+  | [x; y; c; s; c0; s0; c1; s1; c2; s2] ->
+Imp(And(And(carryselect x y c0 c1 s0 s1 c s n k,Not(c 0)),
+ripplecarry0 x y c2 s2 n),
+And(Iff(c n,c2 n),
+    conjoin (fun i -> Iff(s i,s2 i)) (0 -- (n - 1))))
+  | _ -> failwith "Unexpected error"
+end
