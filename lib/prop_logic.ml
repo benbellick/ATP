@@ -8,33 +8,29 @@ let rec eval fm v =
   match fm with
   | False -> false
   | True -> true
-  | Atom(x) -> v x
-  | Not(p) -> not (eval p v)
-  | And(p,q) -> eval p v && eval q v
-  | Or(p,q) -> eval p v || eval q v
-  | Imp(p,q) -> not(eval p v) || eval q v
-  | Iff(p,q) -> (eval p v) = (eval q v)
-  | Forall(_,_) -> failwith "Forall not prop"
-  | Exists(_,_) -> failwith "Exists no prop"
+  | Atom x -> v x
+  | Not p -> not (eval p v)
+  | And (p, q) -> eval p v && eval q v
+  | Or (p, q) -> eval p v || eval q v
+  | Imp (p, q) -> (not (eval p v)) || eval q v
+  | Iff (p, q) -> eval p v = eval q v
+  | Forall (_, _) -> failwith "Forall not prop"
+  | Exists (_, _) -> failwith "Exists no prop"
 
-let negate p = Not (p)
-
-let pname(P s) = s
+let negate p = Not p
+let pname (P s) = s
 
 let parse_propvar _vs inp =
   match inp with
-  | p::oinp when p <> "(" -> Atom(P(p)),oinp
+  | p :: oinp when p <> "(" -> (Atom (P p), oinp)
   | _ -> failwith "parse_propvar"
 
-let parse_prop_formula = make_parser
-    (parse_formula ((fun _ _ -> failwith ""),parse_propvar) [])
+let parse_prop_formula =
+  make_parser (parse_formula ((fun _ _ -> failwith ""), parse_propvar) [])
 
 let default_parser = parse_prop_formula
-
-let print_propvar _prec p = Format.print_string(pname p)
-
+let print_propvar _prec p = Format.print_string (pname p)
 let pp_propvar out p = CCFormat.string out (pname p)
-
 let print_prop_formula = print_qformula print_propvar
 (* If confused by below fn, consider that the input to subfn
    could by a fn f which already "knows" the formula, e.g.
@@ -47,141 +43,142 @@ let pp_prop_formula out (fm : prop formula) = pp_qformula pp_propvar out fm
 let rec onallvaluations subfn v ats =
   match ats with
   | [] -> subfn v
-  | p::ps -> let v' t q = if q = p then t else v(q) in
-    onallvaluations subfn (v' false) ps &&
-    onallvaluations subfn (v' true) ps 
+  | p :: ps ->
+      let v' t q = if q = p then t else v q in
+      onallvaluations subfn (v' false) ps && onallvaluations subfn (v' true) ps
 
 let rec to_string = function
   | Atom a -> pname a
-  | Not(p) -> "~" ^ to_string p
-  | And(p,q) -> to_string p ^ " /\\ " ^ to_string q
-  | Or(p,q) -> to_string p ^ " \\/ " ^ to_string q
-  | Imp(p,q) -> to_string p ^ " ==> " ^ to_string q
-  | Iff(p,q) ->  to_string p ^ " <==> " ^ to_string q
+  | Not p -> "~" ^ to_string p
+  | And (p, q) -> to_string p ^ " /\\ " ^ to_string q
+  | Or (p, q) -> to_string p ^ " \\/ " ^ to_string q
+  | Imp (p, q) -> to_string p ^ " ==> " ^ to_string q
+  | Iff (p, q) -> to_string p ^ " <==> " ^ to_string q
   | _ -> failwith "not a formula"
-
-
 
 let print_truthtable fm =
   let ats = atoms fm in
   let width = CCList.fold_right (max % String.length % pname) ats 5 + 1 in
-  let fixw s = s^String.make(width - String.length s) ' ' in
+  let fixw s = s ^ String.make (width - String.length s) ' ' in
   let truthstring p = fixw (if p then "true" else "false") in
   let mk_row v =
-     let lis = CCList.map (fun x -> truthstring(v x)) ats
-     and ans = truthstring(eval fm v) in
-     print_string(CCList.fold_right (^) lis ("| "^ans)); print_newline(); true in
-  let separator = String.make (width * List.length ats + 9) '-' in
-  print_string(CCList.fold_right (fun s t -> fixw(pname s) ^ t) ats "| formula");
-  print_newline(); print_string separator; print_newline();
+    let lis = CCList.map (fun x -> truthstring (v x)) ats
+    and ans = truthstring (eval fm v) in
+    print_string (CCList.fold_right ( ^ ) lis ("| " ^ ans));
+    print_newline ();
+    true
+  in
+  let separator = String.make ((width * List.length ats) + 9) '-' in
+  print_string
+    (CCList.fold_right (fun s t -> fixw (pname s) ^ t) ats "| formula");
+  print_newline ();
+  print_string separator;
+  print_newline ();
   let _ = onallvaluations mk_row (fun _x -> false) ats in
-  print_string separator; print_newline()
+  print_string separator;
+  print_newline ()
 
-
-let tautology fm = 
-  onallvaluations (eval fm) (fun _ -> false) (atoms fm)
-
-let unsatisfiable fm = tautology( negate fm)
+let tautology fm = onallvaluations (eval fm) (fun _ -> false) (atoms fm)
+let unsatisfiable fm = tautology (negate fm)
 let satisfiable fm = not (unsatisfiable fm)
-
 let psubst subfn = onatoms (fun p -> Fpf.tryapplyd subfn p (Atom p))
 
 let rec dual = function
   | False -> True
   | True -> False
-  | Atom(p) -> Atom(p)
-  | Not(p) -> Not(dual p)
-  | And(p,q) -> Or(dual p, dual q)
-  | Or(p,q) -> And(dual p, dual q)
+  | Atom p -> Atom p
+  | Not p -> Not (dual p)
+  | And (p, q) -> Or (dual p, dual q)
+  | Or (p, q) -> And (dual p, dual q)
   | _ -> failwith "Formula contains ==> or <=>"
-    
 
-let psimplify1 = function 
+let psimplify1 = function
   | Not False -> True
   | Not True -> False
-  | Not(Not p) -> p
-  | And(_,False) | And(False,_) -> False
-  | And(p,True) | And(True,p) -> p
-  | Or(p,False) | Or(False,p) -> p
-  | Or(_,True) | Or(True,_) -> True
-  | Imp(False,_) | Imp(_,True) -> True
-  | Imp(True,p) -> p
-  | Imp(p,False) -> Not p
-  | Iff(p,True) | Iff(True,p) -> p
-  | Iff(p,False) | Iff(False,p) -> Not p
+  | Not (Not p) -> p
+  | And (_, False) | And (False, _) -> False
+  | And (p, True) | And (True, p) -> p
+  | Or (p, False) | Or (False, p) -> p
+  | Or (_, True) | Or (True, _) -> True
+  | Imp (False, _) | Imp (_, True) -> True
+  | Imp (True, p) -> p
+  | Imp (p, False) -> Not p
+  | Iff (p, True) | Iff (True, p) -> p
+  | Iff (p, False) | Iff (False, p) -> Not p
   | fm -> fm
 
 let rec psimplify = function
-  | Not p -> psimplify1 (Not(psimplify p))
-  | And(p,q) -> psimplify1 (And(psimplify p,psimplify q))
-  | Or(p,q) -> psimplify1 (Or(psimplify p,psimplify q))
-  | Imp(p,q) -> psimplify1 (Imp(psimplify p,psimplify q))
-  | Iff(p,q) -> psimplify1 (Iff(psimplify p,psimplify q))
+  | Not p -> psimplify1 (Not (psimplify p))
+  | And (p, q) -> psimplify1 (And (psimplify p, psimplify q))
+  | Or (p, q) -> psimplify1 (Or (psimplify p, psimplify q))
+  | Imp (p, q) -> psimplify1 (Imp (psimplify p, psimplify q))
+  | Iff (p, q) -> psimplify1 (Iff (psimplify p, psimplify q))
   | fm -> fm
 
-let negative = function (Not _) -> true | _ -> false
-let positive lit = not(negative lit)
-let negate = function (Not p) -> p | p -> Not p
+let negative = function Not _ -> true | _ -> false
+let positive lit = not (negative lit)
+let negate = function Not p -> p | p -> Not p
 
 let rec nnf = function
-| And(p,q) -> And(nnf p,nnf q)
-| Or(p,q) -> Or(nnf p,nnf q)
-| Imp(p,q) -> Or(nnf(Not p),nnf q)
-| Iff(p,q) -> Or(And(nnf p,nnf q),And(nnf(Not p),nnf(Not q)))
-| Not(Not p) -> nnf p
-| Not(And(p,q)) -> Or(nnf(Not p),nnf(Not q))
-| Not(Or(p,q)) -> And(nnf(Not p),nnf(Not q))
-| Not(Imp(p,q)) -> And(nnf p,nnf(Not q))
-| Not(Iff(p,q)) -> Or(And(nnf p,nnf(Not q)),And(nnf(Not p),nnf q))
-| fm -> fm
+  | And (p, q) -> And (nnf p, nnf q)
+  | Or (p, q) -> Or (nnf p, nnf q)
+  | Imp (p, q) -> Or (nnf (Not p), nnf q)
+  | Iff (p, q) -> Or (And (nnf p, nnf q), And (nnf (Not p), nnf (Not q)))
+  | Not (Not p) -> nnf p
+  | Not (And (p, q)) -> Or (nnf (Not p), nnf (Not q))
+  | Not (Or (p, q)) -> And (nnf (Not p), nnf (Not q))
+  | Not (Imp (p, q)) -> And (nnf p, nnf (Not q))
+  | Not (Iff (p, q)) -> Or (And (nnf p, nnf (Not q)), And (nnf (Not p), nnf q))
+  | fm -> fm
 
-let nnf fm = nnf(psimplify fm)
+let nnf fm = nnf (psimplify fm)
 
-let rec nenf  = function
-Not(Not p) -> nenf p
-| Not(And(p,q)) -> Or(nenf(Not p),nenf(Not q))
-| Not(Or(p,q)) -> And(nenf(Not p),nenf(Not q))
-| Not(Imp(p,q)) -> And(nenf p,nenf(Not q))
-| Not(Iff(p,q)) -> Iff(nenf p,nenf(Not q))
-| And(p,q) -> And(nenf p,nenf q)
-| Or(p,q) -> Or(nenf p,nenf q)
-| Imp(p,q) -> Or(nenf(Not p),nenf q)
-| Iff(p,q) -> Iff(nenf p,nenf q)
-| fm -> fm
+let rec nenf = function
+  | Not (Not p) -> nenf p
+  | Not (And (p, q)) -> Or (nenf (Not p), nenf (Not q))
+  | Not (Or (p, q)) -> And (nenf (Not p), nenf (Not q))
+  | Not (Imp (p, q)) -> And (nenf p, nenf (Not q))
+  | Not (Iff (p, q)) -> Iff (nenf p, nenf (Not q))
+  | And (p, q) -> And (nenf p, nenf q)
+  | Or (p, q) -> Or (nenf p, nenf q)
+  | Imp (p, q) -> Or (nenf (Not p), nenf q)
+  | Iff (p, q) -> Iff (nenf p, nenf q)
+  | fm -> fm
 
-let nenf fm = nenf(psimplify fm)
+let nenf fm = nenf (psimplify fm)
 
-let list_conj l = if l = [] then True else CCList.reduce_exn (fun x y -> And(x,y)) l
+let list_conj l =
+  if l = [] then True else CCList.reduce_exn (fun x y -> And (x, y)) l
 
-let list_disj l = if l = [] then False else CCList.reduce_exn (fun x y -> Or(x,y)) l
+let list_disj l =
+  if l = [] then False else CCList.reduce_exn (fun x y -> Or (x, y)) l
 
 let mk_lits pvs v =
   list_conj (CCList.map (fun p -> if eval p v then p else Not p) pvs)
 
-
 let rec allsatvaluations subfn v pvs =
-match pvs with
-  | [] -> if subfn v then [v] else []
-  | p::ps -> let v' t q = if q = p then t else v(q) in
-    allsatvaluations subfn (v' false) ps @
-    allsatvaluations subfn (v' true) ps
+  match pvs with
+  | [] -> if subfn v then [ v ] else []
+  | p :: ps ->
+      let v' t q = if q = p then t else v q in
+      allsatvaluations subfn (v' false) ps @ allsatvaluations subfn (v' true) ps
 
 let _dnf fm =
-  let open CCList in 
+  let open CCList in
   let pvs = atoms fm in
   let satvals = allsatvaluations (eval fm) (fun _ -> false) pvs in
   list_disj (map (mk_lits (map (fun p -> Atom p) pvs)) satvals)
 
 let rec distrib fm =
-match fm with
-  | And(p,(Or(q,r))) -> Or(distrib(And(p,q)),distrib(And(p,r)))
-  | And(Or(p,q),r) -> Or(distrib(And(p,r)),distrib(And(q,r)))
+  match fm with
+  | And (p, Or (q, r)) -> Or (distrib (And (p, q)), distrib (And (p, r)))
+  | And (Or (p, q), r) -> Or (distrib (And (p, r)), distrib (And (q, r)))
   | _ -> fm
 
 let rec rawdnf fm =
-match fm with
-  | And(p,q) -> distrib(And(rawdnf p,rawdnf q))
-  | Or(p,q) -> Or(rawdnf p,rawdnf q)
+  match fm with
+  | And (p, q) -> distrib (And (rawdnf p, rawdnf q))
+  | Or (p, q) -> Or (rawdnf p, rawdnf q)
   | _ -> fm
 
 let allpairs f l1 l2 =
@@ -190,107 +187,123 @@ let allpairs f l1 l2 =
   let+ i2 = l2 in
   f i1 i2
 
-
 let distrib s1 s2 =
-  let cmp = compare in 
-  CCList.(sort_uniq (allpairs (union ~eq:(=))  s1 s2) ~cmp)
+  let cmp = compare in
+  CCList.(sort_uniq (allpairs (union ~eq:( = )) s1 s2) ~cmp)
 
 let rec purednf fm =
   match fm with
-  | And(p,q) -> distrib (purednf p) (purednf q)
-  | Or(p,q) -> CCList.union ~eq:(=) (purednf p) (purednf q)
-  | _ -> [[fm]]
+  | And (p, q) -> distrib (purednf p) (purednf q)
+  | Or (p, q) -> CCList.union ~eq:( = ) (purednf p) (purednf q)
+  | _ -> [ [ fm ] ]
 
 let trivial lits =
-  let open CCList in 
-  let pos,neg = partition positive lits in
-  let im = Util.image negate neg in 
-  CCList.inter ~eq:(=) pos (im) <> []
+  let open CCList in
+  let pos, neg = partition positive lits in
+  let im = Util.image negate neg in
+  CCList.inter ~eq:( = ) pos im <> []
 
 let simpdnf fm =
-  if fm = False then [] else if fm = True then [[]] else
-    let djs = CCList.filter (CCFun.negate trivial) (purednf(nnf fm)) in
+  if fm = False then []
+  else if fm = True then [ [] ]
+  else
+    let djs = CCList.filter (CCFun.negate trivial) (purednf (nnf fm)) in
     (* subset doesn't check for proper but original code checks for proper subset. Does this matter?*)
-    CCList.filter (fun d -> not(CCList.exists (fun d' -> (CCList.subset ~eq:(=) d' d) && d' <> d) djs)) djs
+    CCList.filter
+      (fun d ->
+        not
+          (CCList.exists
+             (fun d' -> CCList.subset ~eq:( = ) d' d && d' <> d)
+             djs))
+      djs
 
-let dnf fm = list_disj(CCList.map list_conj (simpdnf fm))
-
-let purecnf fm = Util.image (Util.image negate) (purednf(nnf(Not fm)))
+let dnf fm = list_disj (CCList.map list_conj (simpdnf fm))
+let purecnf fm = Util.image (Util.image negate) (purednf (nnf (Not fm)))
 
 let simpcnf fm =
-  if fm = False then [[]] else if fm = True then [] else
+  if fm = False then [ [] ]
+  else if fm = True then []
+  else
     let cjs = CCList.filter (CCFun.negate trivial) (purecnf fm) in
-    CCList.filter (fun c -> not(CCList.exists (fun c' -> Util.psubset c' c) cjs)) cjs
+    CCList.filter
+      (fun c -> not (CCList.exists (fun c' -> Util.psubset c' c) cjs))
+      cjs
 
-let cnf fm = list_conj(CCList.map list_disj (simpcnf fm))
-
+let cnf fm = list_conj (CCList.map list_disj (simpcnf fm))
 
 module Examples = struct
-let ramsey s t n =
-  let open CCList in
-  let open CCFun in 
-  let open Util in 
-  let vertices = 1 -- n in
-  let yesgrps = map (Util.allsets 2) (allsets s vertices)
-  and nogrps = map (allsets 2) (allsets t vertices) in
-  let e = function
-    | [m;n] -> Atom(P("p_"^(string_of_int m)^"_"^(string_of_int n)))
-    | _ -> failwith "Error in ramsey" in
-  Or(list_disj (map (list_conj % map e) yesgrps),
-     list_disj (map (list_conj % map (fun p -> Not(e p))) nogrps))
+  let ramsey s t n =
+    let open CCList in
+    let open CCFun in
+    let open Util in
+    let vertices = 1 -- n in
+    let yesgrps = map (Util.allsets 2) (allsets s vertices)
+    and nogrps = map (allsets 2) (allsets t vertices) in
+    let e = function
+      | [ m; n ] -> Atom (P ("p_" ^ string_of_int m ^ "_" ^ string_of_int n))
+      | _ -> failwith "Error in ramsey"
+    in
+    Or
+      ( list_disj (map (list_conj % map e) yesgrps),
+        list_disj (map (list_conj % map (fun p -> Not (e p))) nogrps) )
 
-let halfsum x y = Iff(x, Not y)
-let halfcarry x y = And(x,y)
+  let halfsum x y = Iff (x, Not y)
+  let halfcarry x y = And (x, y)
+  let ha x y s c = And (Iff (s, halfsum x y), Iff (c, halfcarry x y))
+  let carry x y z = Or (And (x, y), And (Or (x, y), z))
+  let sum x y z = halfsum (halfsum x y) z
+  let fa x y z s c = And (Iff (s, sum x y z), Iff (c, carry x y z))
+  let conjoin f l = list_conj (CCList.map f l)
 
-let ha x y s c = And(Iff(s,halfsum x y),Iff(c,halfcarry x y))
+  let ripplecarry x y c out n =
+    let open CCList in
+    conjoin (fun i -> fa (x i) (y i) (c i) (out i) (c (i + 1))) (0 -- (n - 1))
 
-let carry x y z = Or(And(x,y),And(Or(x,y),z))
-let sum x y z = halfsum (halfsum x y) z
-let fa x y z s c = And(Iff(s,sum x y z),Iff(c,carry x y z))
+  let mk_index x i = Atom (P (x ^ "_" ^ string_of_int i))
 
-let conjoin f l = list_conj (CCList.map f l)
-let ripplecarry x y c out n =
-  let open CCList in 
-  conjoin (fun i -> fa (x i) (y i) (c i) (out i) (c(i + 1)))
-(0 -- (n - 1))
-let mk_index x i = Atom(P(x^"_"^(string_of_int i)))
-and mk_index2 x i j =
-Atom(P(x^"_"^(string_of_int i)^"_"^(string_of_int j)))
-let ripplecarry0 x y c out n =
-psimplify
-(ripplecarry x y (fun i -> if i = 0 then False else c i) out n)
+  and mk_index2 x i j =
+    Atom (P (x ^ "_" ^ string_of_int i ^ "_" ^ string_of_int j))
 
+  let ripplecarry0 x y c out n =
+    psimplify (ripplecarry x y (fun i -> if i = 0 then False else c i) out n)
 
-let ripplecarry1 x y c out n =
-psimplify
-  (ripplecarry x y (fun i -> if i = 0 then True else c i) out n)
+  let ripplecarry1 x y c out n =
+    psimplify (ripplecarry x y (fun i -> if i = 0 then True else c i) out n)
 
-let mux sel in0 in1 = Or(And(Not sel,in0),And(sel,in1))
+  let mux sel in0 in1 = Or (And (Not sel, in0), And (sel, in1))
+  let offset n x i = x (n + i)
 
-let offset n x i = x(n + i)
+  let rec carryselect x y c0 c1 s0 s1 c s n k =
+    let ( -- ) = CCList.( -- ) in
+    let k' = min n k in
+    let fm =
+      And
+        ( And (ripplecarry0 x y c0 s0 k', ripplecarry1 x y c1 s1 k'),
+          And
+            ( Iff (c k', mux (c 0) (c0 k') (c1 k')),
+              conjoin
+                (fun i -> Iff (s i, mux (c 0) (s0 i) (s1 i)))
+                (0 -- (k' - 1)) ) )
+    in
+    if k' < k then fm
+    else
+      And
+        ( fm,
+          carryselect (offset k x) (offset k y) (offset k c0) (offset k c1)
+            (offset k s0) (offset k s1) (offset k c) (offset k s) (n - k) k )
 
-let rec carryselect x y c0 c1 s0 s1 c s n k =
-  let (--) = CCList.(--) in 
-let k' = min n k in
-let fm =
-And(And(ripplecarry0 x y c0 s0 k',ripplecarry1 x y c1 s1 k'),
-And(Iff(c k',mux (c 0) (c0 k') (c1 k')),
-conjoin (fun i -> Iff(s i,mux (c 0) (s0 i) (s1 i)))
-(0 -- (k' - 1)))) in
-if k' < k then fm else
-And(fm,carryselect
-(offset k x) (offset k y) (offset k c0) (offset k c1)
-(offset k s0) (offset k s1) (offset k c) (offset k s)
-(n - k) k)
-
-let mk_adder_test n k =
-  let open CCList in
-  match  map mk_index
-["x"; "y"; "c"; "s"; "c0"; "s0"; "c1"; "s1"; "c2"; "s2"]  with
-  | [x; y; c; s; c0; s0; c1; s1; c2; s2] ->
-Imp(And(And(carryselect x y c0 c1 s0 s1 c s n k,Not(c 0)),
-ripplecarry0 x y c2 s2 n),
-And(Iff(c n,c2 n),
-    conjoin (fun i -> Iff(s i,s2 i)) (0 -- (n - 1))))
-  | _ -> failwith "Unexpected error"
+  let mk_adder_test n k =
+    let open CCList in
+    match
+      map mk_index [ "x"; "y"; "c"; "s"; "c0"; "s0"; "c1"; "s1"; "c2"; "s2" ]
+    with
+    | [ x; y; c; s; c0; s0; c1; s1; c2; s2 ] ->
+        Imp
+          ( And
+              ( And (carryselect x y c0 c1 s0 s1 c s n k, Not (c 0)),
+                ripplecarry0 x y c2 s2 n ),
+            And
+              ( Iff (c n, c2 n),
+                conjoin (fun i -> Iff (s i, s2 i)) (0 -- (n - 1)) ) )
+    | _ -> failwith "Unexpected error"
 end
