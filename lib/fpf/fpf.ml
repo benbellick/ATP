@@ -101,6 +101,7 @@ let applyd =
     look f
 
 let apply f = applyd f (fun _x -> failwith "apply")
+let apply_safe f = try Some (apply f) with Failure _ -> None
 let tryapplyd f a d = applyd f (fun _x -> d) a
 let tryapplyl f x = tryapplyd f x []
 

@@ -360,6 +360,9 @@ end
 
 let mkprop n = (Atom (P ("p_" ^ string_of_int n)), n + 1)
 
+(** example mapping in defs "a || b |-> (p_3, p_3 <=> a || b)",
+   i.e. take the formula we are abstracting and map it to the pair of
+ its place holder and what it represents*)
 let rec maincnf ((fm, _defs, _n) as trip) =
   match fm with
   | And (p, q) -> defstep mk_and (p, q) trip
@@ -388,7 +391,7 @@ let max_varindex pfx =
         max n (int_of_string s')
       else n
 
-let mk_defcnf fn (fm : 'a formula) =
+let mk_defcnf fn (fm : prop formula) =
   let open CCFun in
   let open Fpf in
   let open CCList in
@@ -398,4 +401,25 @@ let mk_defcnf fn (fm : 'a formula) =
   let deflist = map (snd % snd) (graph defs) in
   Util.unions (simpcnf fm'' :: map simpcnf deflist)
 
-let defcnf fm = list_conj (CCList.map list_disj (mk_defcnf maincnf fm))
+(*Old defcnf*)
+let _defcnf fm = list_conj (CCList.map list_disj (mk_defcnf maincnf fm))
+
+let subcnf sfn op (p, q) (_fm, defs, n) =
+  let fm1, defs1, n1 = sfn (p, defs, n) in
+  let fm2, defs2, n2 = sfn (q, defs1, n1) in
+  (op fm1 fm2, defs2, n2)
+
+let rec orcnf ((fm, _defs, _n) as trip) =
+  match fm with
+  | Or (p, q) -> subcnf orcnf mk_or (p, q) trip
+  | _ -> maincnf trip
+
+let rec andcnf ((fm, _defs, _n) as trip) =
+  match fm with
+  | And (p, q) -> subcnf andcnf mk_and (p, q) trip
+  | _ -> orcnf trip
+
+let defcnfs fm = mk_defcnf andcnf fm
+
+(* optimized cnf but I don't really understand the implementation*)
+let defcnf fm = list_conj (CCList.map list_disj (defcnfs fm))
