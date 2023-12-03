@@ -19,3 +19,11 @@ let unions (sets : 'a list list) =
   let union (l1 : 'a list) (l2 : 'a list) = CCList.union ~eq:( = ) l1 l2 in
   let reduce (ss : 'a list list) = CCList.reduce_exn union ss in
   CCList.sort_uniq ~cmp:compare (reduce sets)
+
+let minimize f ls =
+  let idx_fls = CCList.mapi (fun idx l -> (idx, f l)) ls in
+  match
+    CCList.sort (fun (_idx1, fl1) (_idx2, fl2) -> compare fl1 fl2) idx_fls
+  with
+  | (min_idx, _min_fls) :: _ -> CCList.nth ls min_idx
+  | [] -> failwith "minimize"

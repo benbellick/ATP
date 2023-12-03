@@ -433,3 +433,57 @@ let rec andcnf3 ((fm, _defs, _n) as trip) =
   | _ -> maincnf trip
 
 let defcnf3 fm = list_conj (CCList.map list_disj (mk_defcnf andcnf3 fm))
+
+(*David Putnam  *)
+let one_literal_rule clauses =
+  let open CCList in
+  let u = hd (find (fun cl -> length cl = 1) clauses) in
+  let u' = negate u in
+  let clauses1 = filter (fun cl -> not (mem u cl)) clauses in
+  (*We are subtract the sets below but assuming the the lists have already been setified *)
+  Util.image (fun cl -> sorted_diff_uniq ~cmp:Stdlib.compare cl [ u' ]) clauses1
+
+let affirmative_negative_rule clauses =
+  let open CCList in
+  let neg', pos = partition negative (Util.unions clauses) in
+  let neg = Util.image negate neg' in
+  let pos_only = sorted_diff_uniq ~cmp:Stdlib.compare pos neg
+  and neg_only = sorted_diff_uniq ~cmp:Stdlib.compare neg pos in
+  let pure = union ~eq:( = ) pos_only (Util.image negate neg_only) in
+  if pure = [] then failwith "affirmative_negative_rule"
+  else filter (fun cl -> inter ~eq:( = ) cl pure = []) clauses
+
+let resolve_on p clauses =
+  let open CCList in
+  let p' = negate p and pos, notpos = partition (mem p) clauses in
+  let neg, other = partition (mem p') notpos in
+  let pos' = Util.image (filter (fun l -> l <> p)) pos
+  and neg' = Util.image (filter (fun l -> l <> p')) neg in
+  let res0 = allpairs (union ~eq:( = )) pos' neg' in
+  union ~eq:( = ) other (filter (CCFun.negate trivial) res0)
+
+let resolution_blowup cls l =
+  let open CCList in
+  let m = length (filter (mem l) cls)
+  and n = length (filter (mem (negate l)) cls) in
+  (m * n) - m - n
+
+let resolution_rule clauses =
+  let open CCList in
+  let pvs = filter positive (Util.unions clauses) in
+  let p = Util.minimize (resolution_blowup clauses) pvs in
+  resolve_on p clauses
+
+let rec dp clauses =
+  if clauses = [] then true
+  else if CCList.mem [] clauses then false
+  else
+    try
+      dp (one_literal_rule clauses)
+      (*not found returned by find... ugly to use exceptions, TODO: fix*)
+    with Failure _ | Not_found -> (
+      try dp (affirmative_negative_rule clauses)
+      with Failure _ -> dp (resolution_rule clauses))
+
+let dpsat fm = dp (defcnfs fm)
+let dptaut fm = not (dpsat (Not fm))
