@@ -197,6 +197,8 @@ let rec purednf fm =
   | Or (p, q) -> CCList.union ~eq:( = ) (purednf p) (purednf q)
   | _ -> [ [ fm ] ]
 
+(*Check checks to see if there are any complimentary literals in the same list*)
+(* e.g. trivial {p, q, ~p} = true. What to do with a trival list is context dependent (conjunct or disjunct?*)
 let trivial lits =
   let open CCList in
   let pos, neg = partition positive lits in
@@ -225,9 +227,10 @@ let simpcnf fm =
   else if fm = True then []
   else
     let cjs = CCList.filter (CCFun.negate trivial) (purecnf fm) in
-    CCList.filter
-      (fun c -> not (CCList.exists (fun c' -> Util.psubset c' c) cjs))
-      cjs
+    let isnt_subsumed c =
+      not (CCList.exists (fun c' -> Util.psubset c' c) cjs)
+    in
+    CCList.filter isnt_subsumed cjs
 
 let cnf fm = list_conj (CCList.map list_disj (simpcnf fm))
 
@@ -402,9 +405,9 @@ let mk_defcnf fn (fm : prop formula) =
   Util.unions (simpcnf fm'' :: map simpcnf deflist)
 
 (*Old defcnf*)
-let _defcnf fm = list_conj (CCList.map list_disj (mk_defcnf maincnf fm))
+let defcnf_old fm = list_conj (CCList.map list_disj (mk_defcnf maincnf fm))
 
-let subcnf sfn op (p, q) (_fm, defs, n) =
+let subcnf sfn op ((p, q) : 'a formula * 'a formula) (_fm, defs, n) =
   let fm1, defs1, n1 = sfn (p, defs, n) in
   let fm2, defs2, n2 = sfn (q, defs1, n1) in
   (op fm1 fm2, defs2, n2)
@@ -423,3 +426,10 @@ let defcnfs fm = mk_defcnf andcnf fm
 
 (* optimized cnf but I don't really understand the implementation*)
 let defcnf fm = list_conj (CCList.map list_disj (defcnfs fm))
+
+let rec andcnf3 ((fm, _defs, _n) as trip) =
+  match fm with
+  | And (p, q) -> subcnf andcnf3 mk_and (p, q) trip
+  | _ -> maincnf trip
+
+let defcnf3 fm = list_conj (CCList.map list_disj (mk_defcnf andcnf3 fm))
