@@ -27,3 +27,11 @@ let minimize f ls =
   with
   | (min_idx, _min_fls) :: _ -> CCList.nth ls min_idx
   | [] -> failwith "minimize"
+
+let maximize f ls =
+  let idx_fls = CCList.mapi (fun idx l -> (idx, f l)) ls in
+  match
+    CCList.sort (fun (_idx1, fl1) (_idx2, fl2) -> -1 * compare fl1 fl2) idx_fls
+  with
+  | (min_idx, _min_fls) :: _ -> CCList.nth ls min_idx
+  | [] -> failwith "minimize"

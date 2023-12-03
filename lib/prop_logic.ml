@@ -487,3 +487,26 @@ let rec dp clauses =
 
 let dpsat fm = dp (defcnfs fm)
 let dptaut fm = not (dpsat (Not fm))
+
+let posneg_count cls l =
+  let open CCList in
+  let m = length (filter (mem l) cls)
+  and n = length (filter (mem (negate l)) cls) in
+  m + n
+
+let rec dpll clauses =
+  let open CCList in
+  if clauses = [] then true
+  else if mem [] clauses then false
+  else
+    try dpll (one_literal_rule clauses)
+    with Failure _ | Not_found -> (
+      try dpll (affirmative_negative_rule clauses)
+      with Failure _ ->
+        let pvs = filter positive (Util.unions clauses) in
+        let p = Util.maximize (posneg_count clauses) pvs in
+        dpll (sorted_insert ~cmp:Stdlib.compare [ p ] clauses)
+        || dpll (sorted_insert ~cmp:Stdlib.compare [ negate p ] clauses))
+
+let dpllsat fm = dpll (defcnfs fm)
+let dplltaut fm = not (dpllsat (Not fm))
