@@ -18,4 +18,7 @@ let rec f = function
       print_prop_formula @@ dnf p;
       f ps
 
-let () = f ps
+let () =
+  let pp_formulas = CCFormat.list pp_prop_formula in
+  CCFormat.printf "%a" pp_formulas ps;
+  f ps

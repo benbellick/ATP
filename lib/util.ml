@@ -17,7 +17,9 @@ let rec allsets m l =
 
 let unions (sets : 'a list list) =
   let union (l1 : 'a list) (l2 : 'a list) = CCList.union ~eq:( = ) l1 l2 in
-  let reduce (ss : 'a list list) = CCList.reduce_exn union ss in
+  let reduce (ss : 'a list list) =
+    match ss with [] -> [] | _ -> CCList.reduce_exn union ss
+  in
   CCList.sort_uniq ~cmp:compare (reduce sets)
 
 let minimize f ls =

@@ -32,13 +32,13 @@ let default_parser = parse_prop_formula
 let print_propvar _prec p = Format.print_string (pname p)
 let pp_propvar out p = CCFormat.string out (pname p)
 let print_prop_formula = print_qformula print_propvar
+let pp_prop_formula = pp_qformula pp_propvar
+
 (* If confused by below fn, consider that the input to subfn
    could by a fn f which already "knows" the formula, e.g.
    f: formula -> valuation -> bool, and we pass in
    f fm partial application
 *)
-
-let pp_prop_formula out (fm : prop formula) = pp_qformula pp_propvar out fm
 
 let rec onallvaluations subfn v ats =
   match ats with
@@ -510,3 +510,95 @@ let rec dpll clauses =
 
 let dpllsat fm = dpll (defcnfs fm)
 let dplltaut fm = not (dpllsat (Not fm))
+
+(*iterative DPLL*)
+type trailmix = Guessed | Deduced
+
+let unassigned cls trail =
+  let open Util in
+  let ( % ) = CCFun.( % ) in
+  let litabs p = match p with Not q -> q | _ -> p in
+  CCList.sorted_diff_uniq ~cmp:compare
+    (unions (image (image litabs) cls))
+    (image (litabs % fst) trail)
+
+let rec unit_subpropagate (cls, fn, trail) =
+  let open CCList in
+  let open Fpf in
+  let ( % ) = CCFun.( % ) in
+  (*if p is true then we take {{q,r,~p} -> {q,r}, hence why we negate first *)
+  let cls' = map (filter (not % defined fn % negate)) cls in
+  let uu = function [ c ] when not (defined fn c) -> Some [ c ] | _ -> None in
+  let newunits = Util.unions (filter_map uu cls') in
+  if newunits = [] then (cls', fn, trail)
+  else
+    let trail' = fold_right (fun p t -> (p, Deduced) :: t) newunits trail
+    and fn' = fold_right (fun u -> u |-> ()) newunits fn in
+    unit_subpropagate (cls', fn', trail')
+
+let unit_propagate (cls, trail) =
+  let open Fpf in
+  let fn = CCList.fold_right (fun (x, _) -> x |-> ()) trail undefined in
+  let cls', _fn', trail' = unit_subpropagate (cls, fn, trail) in
+  (cls', trail')
+
+let rec backtrack trail =
+  match trail with (_p, Deduced) :: tt -> backtrack tt | _ -> trail
+
+let rec dpli cls trail =
+  let cls', trail' = unit_propagate (cls, trail) in
+  if CCList.mem [] cls' then
+    match backtrack trail with
+    | (p, Guessed) :: tt -> dpli cls ((negate p, Deduced) :: tt)
+    | _ -> false
+  else
+    match unassigned cls trail' with
+    | [] -> true
+    | ps ->
+        let p = Util.maximize (posneg_count cls') ps in
+        dpli cls ((p, Guessed) :: trail')
+
+let dplisat fm = dpli (defcnfs fm) []
+let dplitaut fm = not (dplisat (Not fm))
+
+let rec backjump cls p trail =
+  let open CCList in
+  match backtrack trail with
+  | (_q, Guessed) :: tt ->
+      let cls', _trail' = unit_propagate (cls, (p, Guessed) :: tt) in
+      if mem [] cls' then backjump cls p tt else trail
+  | _ -> trail
+
+let rec dplb cls trail =
+  let open Util in
+  let open CCList in
+  let ( % ) = CCFun.( % ) in
+  let cls', trail' = unit_propagate (cls, trail) in
+  if mem [] cls' then
+    match backtrack trail with
+    | (p, Guessed) :: tt ->
+        let trail' = backjump cls p tt in
+        let declits = filter (fun (_, d) -> d = Guessed) trail' in
+        let conflict =
+          sorted_insert ~cmp:Stdlib.compare (negate p)
+            (image (negate % fst) declits)
+        in
+        dplb (conflict :: cls) ((negate p, Deduced) :: trail')
+    | _ -> false
+  else
+    match unassigned cls trail' with
+    | [] -> true
+    | ps ->
+        let p = maximize (posneg_count cls') ps in
+        dplb cls ((p, Guessed) :: trail')
+
+let dplbsat fm = dplb (defcnfs fm) []
+let dplbtaut fm = not (dplbsat (Not fm))
+
+let triplicate fm =
+  let open Fpf in
+  let ( % ) = CCFun.( % ) in
+  let fm' = nenf fm in
+  let n = 1 + overatoms (max_varindex "p_" % pname) fm' 0 in
+  let p, defs, _ = maincnf (fm', undefined, n) in
+  (p, CCList.map (snd % snd) (graph defs))
