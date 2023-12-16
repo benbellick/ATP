@@ -345,7 +345,4 @@ val dplb :
 
 val dplbsat : prop Formula_core.formula -> bool
 val dplbtaut : prop Formula_core.formula -> bool
-
-val triplicate :
-  prop Formula_core.formula ->
-  prop Formula_core.formula * prop Formula_core.formula CCList.t
+val stalmarck : prop Formula_core.formula -> bool

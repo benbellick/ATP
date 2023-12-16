@@ -595,6 +595,7 @@ let rec dplb cls trail =
 let dplbsat fm = dplb (defcnfs fm) []
 let dplbtaut fm = not (dplbsat (Not fm))
 
+(** Basically just turn formula into single literal + list of definitions _ <=> _ x _   *)
 let triplicate fm =
   let open Fpf in
   let ( % ) = CCFun.( % ) in
@@ -602,3 +603,202 @@ let triplicate fm =
   let n = 1 + overatoms (max_varindex "p_" % pname) fm' 0 in
   let p, defs, _ = maincnf (fm', undefined, n) in
   (p, CCList.map (snd % snd) (graph defs))
+
+let atom lit = if negative lit then negate lit else lit
+
+let rec align (p, q) =
+  if atom p < atom q then align (q, p)
+  else if negative p then (negate p, negate q)
+  else (p, q)
+
+let equate2 (p, q) eqv =
+  Union_find.equate (negate p, negate q) (Union_find.equate (p, q) eqv)
+
+let rec irredundant rel eqs =
+  let open Union_find in
+  match eqs with
+  | [] -> []
+  | (p, q) :: oth ->
+      if canonize rel p = canonize rel q then irredundant rel oth
+      else
+        CCList.sorted_insert ~cmp:Stdlib.compare (p, q)
+          (irredundant (equate2 (p, q) rel) oth)
+
+let consequences ((p, q) as peq) fm eqs =
+  (* ((p <=> q) /\ fm) => (r <=> s) *)
+  let follows (r, s) = tautology (Imp (And (Iff (p, q), fm), Iff (r, s))) in
+  irredundant (equate2 peq Union_find.unequal) (CCList.filter follows eqs)
+
+(** triggers fm results in a list of (equiv, consequences),
+  i.e. if equiv were true, then the list of consequences follows*)
+let triggers fm =
+  let open CCList in
+  let poslits =
+    sorted_insert ~cmp:Stdlib.compare True (map (fun p -> Atom p) (atoms fm))
+  in
+  let lits = union ~eq:( = ) poslits (map negate poslits) in
+  let pairs = allpairs (fun p q -> (p, q)) lits lits in
+  let npairs = filter (fun (p, q) -> atom p <> atom q) pairs in
+  let eqs = sort_uniq ~cmp:Stdlib.compare (map align npairs) in
+  let raw = map (fun p -> (p, consequences p fm eqs)) eqs in
+  filter (fun (_, c) -> c <> []) raw
+
+let trigger =
+  let ( % ) = CCFun.( % ) in
+  let ppf = parse_prop_formula in
+  let trig_and = triggers @@ ppf {|p <=> q /\ r|} in
+  let trig_or = triggers @@ ppf {|p <=> q \/ r|} in
+  let trig_imp = triggers @@ ppf {|p <=> q ==> r|} in
+  let trig_iff = triggers @@ ppf {|p <=> q <=> r|} in
+  let ddnegate fm = match fm with Not (Not p) -> p | _ -> fm in
+  let inst_fn = function
+    | [ x; y; z ] ->
+        let subfn = Fpf.fpf [ P "p"; P "q"; P "r" ] [ x; y; z ] in
+        ddnegate % psubst subfn
+    | _ -> failwith "unexpected case in inst_fn"
+  in
+  let inst2_fn i (p, q) = align (inst_fn i p, inst_fn i q) in
+  let instn_fn i (a, c) = (inst2_fn i a, CCList.map (inst2_fn i) c) in
+  let inst_trigger = CCList.map % instn_fn in
+  function
+  | Iff (x, And (y, z)) -> inst_trigger [ x; y; z ] trig_and
+  | Iff (x, Or (y, z)) -> inst_trigger [ x; y; z ] trig_or
+  | Iff (x, Imp (y, z)) -> inst_trigger [ x; y; z ] trig_imp
+  | Iff (x, Iff (y, z)) -> inst_trigger [ x; y; z ] trig_iff
+  | _ -> failwith "Unexpected case in trigger"
+
+let relevance trigs =
+  let open Fpf in
+  let insert_relevant p trg f =
+    (p |-> CCList.sorted_insert ~cmp:Stdlib.compare trg (tryapplyl f p)) f
+  in
+  let insert_relevant2 (((p, q), _) as trg) f =
+    let f' = insert_relevant q trg f in
+    insert_relevant p trg f'
+  in
+  CCList.fold_right insert_relevant2 trigs undefined
+
+let equatecons (p0, q0) ((eqv, rfn) as erf) =
+  let open Union_find in
+  let open Fpf in
+  let open CCList in
+  let ( % ) = CCFun.( % ) in
+  let p = canonize eqv p0 and q = canonize eqv q0 in
+  if p = q then ([], erf)
+  else
+    let p' = canonize eqv (negate p0) and q' = canonize eqv (negate q0) in
+    let eqv' = equate2 (p, q) eqv
+    and sp_pos = tryapplyl rfn p
+    and sp_neg = tryapplyl rfn p'
+    and sq_pos = tryapplyl rfn q
+    and sq_neg = tryapplyl rfn q' in
+    let rfn'' =
+      let rfn' = (canonize eqv' p' |-> union ~eq:( = ) sp_neg sq_neg) rfn in
+      (canonize eqv' p |-> union ~eq:( = ) sp_pos sq_pos) rfn'
+    in
+    let nw =
+      union ~eq:( = )
+        (inter ~eq:( = ) sp_pos sq_pos)
+        (inter ~eq:( = ) sp_neg sq_neg)
+    in
+    (fold_right (union ~eq:( = ) % snd) nw [], (eqv', rfn''))
+
+let rec zero_saturate erf assigs =
+  match assigs with
+  | [] -> erf
+  | (p, q) :: ts ->
+      let news, erf' = equatecons (p, q) erf in
+      zero_saturate erf' (CCList.union ~eq:( = ) ts news)
+
+let zero_saturate_and_check erf trigs =
+  let open Union_find in
+  let open CCList in
+  let ((eqv', _rfn') as erf') = zero_saturate erf trigs in
+  let vars = filter positive (equated eqv') in
+  if exists (fun x -> canonize eqv' x = canonize eqv' (Not x)) vars then
+    snd (equatecons (True, Not True) erf')
+  else erf'
+
+let truefalse pfn =
+  let open Union_find in
+  canonize pfn (Not True) = canonize pfn True
+
+let rec equateset s0 eqfn =
+  match s0 with
+  | a :: (b :: _s2 as s1) -> equateset s1 (snd (equatecons (a, b) eqfn))
+  | _ -> eqfn
+
+let rec inter els ((eq1, _) as erf1) ((eq2, _) as erf2) rev1 rev2 erf =
+  let open Union_find in
+  let open Fpf in
+  match els with
+  | [] -> erf
+  | x :: xs ->
+      let b1 = canonize eq1 x and b2 = canonize eq2 x in
+      let s1 = apply rev1 b1 and s2 = apply rev2 b2 in
+      let s = CCList.inter ~eq:( = ) s1 s2 in
+      inter
+        (CCList.sorted_diff_uniq ~cmp:compare xs s)
+        erf1 erf2 rev1 rev2 (equateset s erf)
+
+let reverseq domain eqv =
+  let open Union_find in
+  let open Fpf in
+  let al = CCList.map (fun x -> (x, canonize eqv x)) domain in
+  CCList.fold_right
+    (fun (y, x) f ->
+      (x |-> CCList.sorted_insert ~cmp:compare y (tryapplyl f x)) f)
+    al undefined
+
+let stal_intersect ((eq1, _) as erf1) ((eq2, _) as erf2) erf =
+  let open Union_find in
+  if truefalse eq1 then erf2
+  else if truefalse eq2 then erf1
+  else
+    let dom1 = equated eq1 and dom2 = equated eq2 in
+    let comdom = CCList.inter ~eq:( = ) dom1 dom2 in
+    let rev1 = reverseq dom1 eq1 and rev2 = reverseq dom2 eq2 in
+    inter comdom erf1 erf2 rev1 rev2 erf
+
+let rec saturate n erf assigs allvars =
+  let ((eqv', _) as erf') = zero_saturate_and_check erf assigs in
+  if n = 0 || truefalse eqv' then erf'
+  else
+    let ((eqv'', _) as erf'') = splits n erf' allvars allvars in
+    if eqv'' = eqv' then erf'' else saturate n erf'' [] allvars
+
+and splits n ((eqv, _) as erf) allvars vars =
+  let open Union_find in
+  match vars with
+  | [] -> erf
+  | p :: ovars ->
+      if canonize eqv p <> p then splits n erf allvars ovars
+      else
+        let erf0 = saturate (n - 1) erf [ (p, Not True) ] allvars
+        and erf1 = saturate (n - 1) erf [ (p, True) ] allvars in
+        let ((eqv', _) as erf') = stal_intersect erf0 erf1 erf in
+        if truefalse eqv' then erf' else splits n erf' allvars ovars
+
+let rec saturate_upto vars n m trigs assigs =
+  let open Union_find in
+  if n > m then failwith ("Not " ^ string_of_int m ^ "-easy")
+  else (
+    print_string ("*** Starting " ^ string_of_int n ^ "-saturation");
+    print_newline ();
+    let eqv, _ = saturate n (unequal, relevance trigs) assigs vars in
+    truefalse eqv || saturate_upto vars (n + 1) m trigs assigs)
+
+let stalmarck fm =
+  let open Fpf in
+  let open CCList in
+  let ( % ) = CCFun.( % ) in
+  let include_trig (e, cqs) f = (e |-> union ~eq:( = ) cqs (tryapplyl f e)) f in
+  let fm' = psimplify (Not fm) in
+  if fm' = False then true
+  else if fm' = True then false
+  else
+    let p, triplets = triplicate fm' in
+    let trigfn =
+      fold_right (fold_right include_trig % trigger) triplets undefined
+    and vars = map (fun p -> Atom p) (Util.unions (map atoms triplets)) in
+    saturate_upto vars 0 2 (graph trigfn) [ (p, True) ]
