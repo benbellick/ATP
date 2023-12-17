@@ -15,6 +15,13 @@ type 'a formula =
 let mk_and p q = And (p, q)
 let mk_or p q = Or (p, q)
 let mk_iff p q = Iff (p, q)
+let mk_imp p q = Imp (p, q)
+
+let dest_imp fm =
+  match fm with Imp (p, q) -> (p, q) | _ -> failwith "dest_imp"
+
+let rec conjuncts fm =
+  match fm with And (p, q) -> conjuncts p @ conjuncts q | _ -> [ fm ]
 
 let rec parse_atomic_formula (ifn, afn) vs inp =
   match inp with

@@ -1,4 +1,5 @@
-open Lib__Prop_logic;;
+open Lib;;
+open Prop_logic;;
 
 let ps = List.map parse_prop_formula
     ["p /\\ q ==> p \\/ q";
