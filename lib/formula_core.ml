@@ -12,10 +12,11 @@ type 'a formula =
   | Forall of string * 'a formula
   | Exists of string * 'a formula
 
+let mk_not p = Not p
 let mk_and p q = And (p, q)
 let mk_or p q = Or (p, q)
-let mk_iff p q = Iff (p, q)
 let mk_imp p q = Imp (p, q)
+let mk_iff p q = Iff (p, q)
 
 let dest_imp fm =
   match fm with Imp (p, q) -> (p, q) | _ -> failwith "dest_imp"
