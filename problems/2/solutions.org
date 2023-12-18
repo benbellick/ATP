@@ -1,0 +1,22 @@
+* 1
+See =gen_n_prop_formsdepth=. 
+* 2
+First as a lemma, notice that $\iff$ is in fact commutative as well. As a simple proof, look at the following truth table:
+
+| $p$ | $q$ | $p\iff q$ | $q\iff p$ |
+|-----+-----+-----------+-----------|
+| T   | F   | F         | F         |
+| T   | T   | T         | T         |
+| F   | T   | F         | F         |
+| F   | F   | T         | T         |
+
+ Given this, we can reduce the problem W.L.O.G to consider only formulas in which the iffs have been alphabetized, i.e. formula which look as follows:
+ T<=>T<=>T<=>p_1<=>p_1<=>p_2<=>p_3<=>p_3<=>...
+
+ notice that for any atom $p_i$, $p_i<=>p_i$ reduces to simply $\top$. Thus, it is now obious that by simple induction, any $p_i$ subformula can be reduced to T if there are an even number of $p_i$'s. By reduced, I mean that $\forall i, p_i <=> p_i$ can be substituted for T w/o changing the truth value of the formula. (Details left for reader).
+
+ Now, the result is easy. Suppose all of the $p_i$'s are even count. Then just perform the above reduction to get down to T.
+
+ Now suppose the formula contains an odd example, say $p_i$. Then we can reduce the formula down to $p_i$ (notice that $T<=>p_i$ is equivalent. This is obviously not a tautology and we are done!
+
+
